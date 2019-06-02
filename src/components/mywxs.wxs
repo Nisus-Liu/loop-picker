@@ -1,0 +1,104 @@
+
+/**
+ * 计算两个节点的小圈距离
+ * @param a
+ * @param b
+ * @param len
+ */
+var lessDist=function(a,b,len) {
+  var d = Math.abs(a-b);
+  if (d < Math.ceil(len / 2)) {
+    // d
+  }else{
+    d = len - d
+  }
+  return d;
+}
+
+// 环形当成线形
+// 计算和前面索引的差
+function diffIndex(after, before, len) {
+  var d = after - before;
+  if (d >= 0) {
+    return d;
+  }else{
+    return len + d;
+  }
+}
+
+
+
+module.exports = {
+  // 计算每个 item 的translateY
+  // reverseThreshold 未达到时, (i-vhtop)*h;
+  translateY: function(i, vhtop, len, reverseThreshold, h, dm) { // top, bottom,
+
+    // // dm<0 上滑; >0 下滑; ==0 没有滑动
+    //
+    // var tbc = h * tbcThreshold;
+    // console.log('i, vhtop, len, reverseThreshold, h, top, bottom, dm');
+    // console.log(i, vhtop, len, reverseThreshold, h, top, bottom, dm);
+    // if (i == bottom && dm > tbc) {
+    //   console.log('下滑', i, bottom)
+    //   // 下滑, 且触发 bottom --> top
+    //   var b2tTY = diffIndex( vhtop,top,len ) * h + dm;
+    //   console.log('b2tTY',b2tTY)
+    //   return b2tTY;
+    // }
+    //
+    // if (i == top && dm <= -tbc) {
+    //   console.log("上滑, i, top",i,top)
+    //   // 上滑, 且触发 top --> bottom
+    //   var t2bTy = (diffIndex( bottom, vhtop, len ) + 1) * h + dm;
+    //   console.log('============t2bTy',t2bTy)
+    //   return t2bTy;
+    // }
+
+
+
+    // 阈值分上下, 正差参照下阈值; 负差参照上阈值
+    // 就是说, 上面太多反转到下面, 下面太多反转到上面去
+    // 至少1
+    reverseThreshold = Math.max(1, reverseThreshold);
+    var upThres = -(len - reverseThreshold+1);
+    var downThres = reverseThreshold;
+
+    var dn = i - vhtop;
+
+    if (dn <= upThres) {
+      // 反转到下方
+      dn += len;
+    }else if (dn >= downThres) {
+      // 反转到上方
+      dn -= len;
+    }else {
+      // dn
+    }
+
+    return dn * h + dm;
+
+    // if (Math.abs(dn) < reverseThreshold) {
+    //   // dn 不变
+    // } else {
+    //   // 到这里, dn 要么<0, 要么>0
+    //   dn += dn < 0 ? len : -len;
+    // }
+    // console.log('dn=', dn);
+  },
+
+  /**
+   * 是否应用 transition
+   * 环形数据中,
+   * 判断自己是否和锚点相邻, <= radius 表示相邻, 否则不相邻
+   * */
+  transitionOn: function(i, focus, radius, len) {
+
+    var d = lessDist(i, focus, len);
+    // console.log('less distance:', d);
+    return d <= radius;
+  },
+
+
+
+
+};

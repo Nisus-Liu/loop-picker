@@ -1,0 +1,485 @@
+<!-- component: goround, created at 2019/6/1 12:56, by Nisus-Liu -->
+<style lang="less">
+  /*.mypicker::-webkit-scrollbar{*/
+  /*width: 0;*/
+  /*height: 0;*/
+  /*color: transparent;*/
+  /*}*/
+  /*
+  vn: 视窗内要显示的item个数, 要求奇数
+  */
+  /*@VH:150px;
+  @vn:3;*/
+
+  .mypicker{
+    /*relative下, 才能隐藏溢出的absolute的子元素*/
+    overflow:hidden;
+    position:relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /*height: @VH/@vn;*/
+    /*height: @VH;*/
+    /*border: 1px solid #3388ff;*/
+
+    &__item{
+      /*height: @VH/@vn;*/
+      width: 100%;
+      /*border: 1px dashed #00aa00;*/
+      /*保证item们起始位置居顶堆叠, 后面方便计算位移*/
+      position: absolute;
+      /*(i-focus+1)*h, i当前item索引*/
+      /*transform: translateY();*/
+      color: #7e7e7e;
+      vertical-align: middle;
+      text-align: center;
+      /*line-height: @VH/@vn;*/
+
+      &.focus{
+        color: #000000;
+        font-weight: 500;
+      }
+      &.selected{
+       text{
+         background: #3390ff;
+         color: #fff;
+       }
+      }
+    }
+  }
+
+  .mypicker__focusbox{
+    /*height:50px;*/
+    border-top:1px solid rgba(200, 200, 200, 0.3);
+    border-bottom:1px solid rgba(200,200,200, 0.3);
+    width:100%;
+    position:absolute;
+    transform:translateY(-50%);
+    top:50%;
+
+  }
+  .mypicker__input {
+    position:absolute;
+    /*和字体大小差不多即可*/
+    /*height:30px;*/
+    transform:translateY(-50%);
+    top:50%;
+    z-index: 100;
+
+    input{
+      text-align: center;
+      vertical-align: middle;
+      /*opacity: 0;*/
+      /*防止点击修改后还是能看到input框的内容*/
+      color: transparent;
+      /*0px 无法输入值*/
+      font-size: 0.1px;
+      /*text-indent: 375px;*/
+    }
+  }
+
+  .mypicker__unit{
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #999999;
+  }
+
+</style>
+  
+<template>
+  <view class="mypicker" bindtouchstart="touchstart" bindtouchmove="touchmove" bindtouchend="touchend"
+  style="height: {{options.viewHeight}}{{px}};">
+
+    <block wx:for="{{items}}" wx:for-item="item" wx:index="index" wx:key="index">
+      <!-- (i-vhtop)*h 渲染的时候, 永远是从 0 开始的 {{((index-vhtop)*h + dm)}}-->
+      <view class="mypicker__item {{index==focus?(selected?'focus selected':'focus'):''}}"
+            bindtap="itemTap({{index}})"
+      style="height: {{itemHeight}}{{px}}; line-height: {{itemHeight}}{{px}}; transform: translateY({{m.translateY(index,vhtop,items.length,reverseThreshold,itemHeight,dm)}}px); {{transitionOn&&m.transitionOn(index,focus,(options.viewNum)/2,items.length)?'transition: transform 0.2s linear;':''}}">
+        <text wx:if="{{index==focus}}" style="font-size: {{itemHeight*0.6}}{{px}}">{{inputing?inputValue:item}}</text>
+        <text wx:else style="font-size: {{itemHeight*0.4}}{{px}}">{{item}}</text>
+      </view>
+    </block>
+    <view class="mypicker__input" style="height: {{itemHeight*0.6}}{{px}}; width: {{itemHeight}}{{px}}">
+      <input type="text" bindfocus="onInputFocus" bindinput="onInputIn({{item}})" bindblur="onInputBlur"
+                             value="{{inputValue}}"
+                             cursor='100'/>
+    </view>
+    <view class="mypicker__focusbox" style="height: {{itemHeight}}{{px}}">
+
+    </view>
+    <view class="mypicker__unit">
+      {{unit}}
+    </view>
+  </view>
+</template>
+  
+<script>
+  import wepy from 'wepy'
+  import mywxs from './mywxs.wxs'
+  const defOpts = {
+    // 像素单位
+    px:'px',
+    // 视窗高度
+    viewHeight:150,
+    // 视窗内item个数, 必须奇数
+    viewNum:3,
+  }
+  /**
+   * 以视窗顶部边缘为界,
+   * 当 translateY 达到这个倍数的h时, 自动反向, 位移到 vhtop 的上方.
+   * 这里规定, items个数偶数时, 上下各一半; 奇数时, 下面多1一个.
+   *
+   * 划分上下item时, 以focus为界, 以 7 个item 为例, 上2下4, reverseThreshold==4.
+   * 每个item索引i, i-vhtop 的绝对值<4, 直接用来乘以h; >=4, 负数, 则+7, 得到倍数, 正数, 则-7得到倍数.
+   * 用上面的倍数, 自动实现反转.
+   *
+   * bug: 结束滑动有点重影闪烁.
+   * 原因: 应该是因为所有的item都是从顶部位移, 带上动画, 就睡有重影. 试试, 仅视窗内 3 个item开启动画.
+   *
+   * bug: 如, 指定最后item为focus时, 动画有重影.(item较少时才会复现)
+   * 原因: 按照相邻法则, 第0个item和最后一个item是相邻的, 所以第0个item也会应用动画. 但是它是向下滑动的, 和其他item方向相反, 从而出现重影.
+   * 主要是tap 时 touchend 还没有来得及关闭, 关闭了动画, 就没事了.
+   * */
+  export default class LoopPicker extends wepy.component {
+    config = {}
+    components = {
+      
+    }
+    props = {
+
+      options:{
+        type:Object,
+        default:defOpts,
+      },
+      items:{
+        type:Array,
+        default: [],
+      },
+      unit:String,
+      
+    }
+    
+    data = {
+      // h:'50',
+      // 视窗内显示 item 数目, 必须奇数
+      // vn: 3,
+      focus: 0,
+      // touchmove 距离
+      dm:0,
+
+      touchstartPageY:0,
+      // 触摸开始时的 focus
+      touchstartFocus:-1,
+      transitionOn:false,
+      // 最顶部item索引
+      // top:0,
+      //
+      inputing:false,
+      inputValue:'',
+      selected:false,
+      lastValidInputValue:'',
+    }
+
+    computed = {
+      px() {
+        return this.options.px;
+      },
+      // 返回item高度, 无单位
+      itemHeight() {
+        return this.options.viewHeight/this.options.viewNum;
+      },
+      // vhtop 向上移动 len-reverseThreshold 就是top了
+      top() {
+        let len = this.items.length;
+        let top = this.shiftIndex(this.vhtop, -len + this.reverseThreshold, len);
+        // console.log('top', top);
+        return top;
+      },
+      bottom() {
+        return this.top==0?this.items.length-1:this.top-1;
+      },
+      // 视窗内 top item.
+      vhtop() {
+        let vt = this.shiftIndex(this.focus, -parseInt(this.options.viewNum / 2), this.items.length);
+        // console.log('vhtop change', vt);
+        return vt;
+      },
+      /**
+       * 以视窗顶部边缘为界,
+       * 当 translateY 达到这个倍数的h时, 自动反向, 位移到 vhtop 的上方.
+       * 以focus为界, 这里规定, items个数偶数时, 上下各一半; 奇数时, 下面多1一个.
+       * 进而推算出, 顶部边缘上下的个数分配.
+       */
+      reverseThreshold() {
+        // return Math.ceil(this.items.length / 2);
+        // console.log('reverseThreshold:', Math.ceil((this.items.length + this.options.viewNum) / 2));
+        return Math.ceil((this.items.length + this.options.viewNum) / 2);
+      }
+
+    }
+    
+    methods = {
+      onInputFocus() {
+        // console.log('onInputFocus');
+        // focus item 内容全选样式
+        this.selected=true;
+      },
+
+      onInputIn(e) {
+        this.inputing = true;
+
+        // 取消选中状态
+        this.selected = false;
+        /*
+        * 达到 2 位字符时, 开始校验.
+        *
+        * */
+        let iv= e.detail.value;
+        // console.log(typeof iv);
+
+        if (iv.length >= 2) {
+          // 校验
+          let i = this.items.indexOf(iv);
+          // console.log('this.items.indexOf(iv)', this.items.indexOf(iv));
+          if (i < 0) {
+            // 输入值不合法
+            // 继续用最近一次合法的输入值, 本次新增输入内容忽略
+            return this.lastValidInputValue;
+          }
+
+        }
+        // 更新合法输入值
+        this.inputValue = this.lastValidInputValue = iv;
+        // console.log(this.inputValue,this.lastValidInputValue,iv)
+      },
+      onInputBlur(e) {
+        this.inputing = false;
+        this.selected = false;
+        this.inputing = false;
+        let newFocusValue = e.detail.value;
+        this.lastValidInputValue = this.inputValue = '';
+        // 没有输入任何内容时视图不变
+        if (!e.detail.value) {
+          return;
+        }
+        // 更新 focus
+        let focus = this.items.indexOf(newFocusValue);
+        if (focus>=0) {
+          this.focusTo(focus);
+        }
+
+      },
+
+      itemTap(index) {
+        // console.log('itemTap:', index);
+        // tap 时 touchend 还没有来得及关闭
+        this.transitionOn = false;
+        this.focusTo(index);
+      },
+      touchstart(e) {
+        // console.log('touchstart', e.touches[0].pageY);
+        this.touchstartPageY = e.touches[0].pageY;
+        this.touchstartFocus = this.focus;
+      },
+      /*
+      * 消费 dm.
+      *
+      * 达到 0.5h , focus 改变, dm 这时不能清零, 否则, 滑动出现跳跃, 不连贯.
+      * dm>0.5h, focus改变, 同时dm=h-dm, 这样逆向回到当前滑动所在位置, 消除跳跃问题.
+      * dm>=1h, focus 改变, 同时 dm=0. (其实就是 dm=h-dm, 因为这时dm=h)
+      *
+      * 更:
+      *   Round(dm) 按这个在touchstartFocus基础上更新focus, dm - Round(dm) 刚好就是调节的位移量.
+      *
+      * Tip: 这里还可以定制 Round 规则, 比如余数达到0.8才进1, 这样的效果就是: 滑动到0.8h时, 才会触发focus更新. 比0.5要看起来延迟更新.
+      * 定制 Round 规则时, 注意 touchend 中, 也要对应处理下, 如果touchmove和touchend的round规则一致, 则不需要特殊处理, 仅仅清零dm即可.
+      * 若不一致, touchend中需要对余数应用新的round规则, 比如dm余出0.7, 在touchmove中并没有进1, 所以, touchend中需要进1, 即增加focus位
+      * 移.
+      *
+      * */
+      touchmove(e) {
+        // this.transitionOn = true;
+        let dmm = e.touches[0].pageY - this.touchstartPageY;
+        dmm = dmm/this.itemHeight;
+        let rdmm = Math.round(dmm);
+        // focus 偏移
+        this.focus = this.shiftIndex(this.touchstartFocus, -rdmm, this.items.length);
+        // 同时, 需要调整位移, 让items处在当前滑动位置, 消除跳跃
+        this.dm = (dmm - rdmm) * this.itemHeight;
+
+
+        // const threshold = 1 * this.itemHeight;
+        // // console.log('touchmove', e.touches[0]);
+        // // if (Math.abs(dmm - this.dm) < 5) {
+        // //   // 小移动不动
+        // //   return;
+        // // }
+        //
+        // this.dm = dmm;
+        // // console.log('dm=',this.dm)
+        //
+        // let mn = 0;
+        // // 达到阈值时, 更新 focus, vhtop 也会跟着变, 从而, items 自动根据上下分配的比例排列
+        // if (this.dm <= -threshold) {
+        //   // 上滑, focus 后移1位
+        //   mn--;
+        // }
+        // if (this.dm >= threshold) {
+        //   mn++;
+        // }
+        //
+        // if (mn !=0) {
+        //   this.focus = this.shiftIndex(this.focus, -mn, this.items.length); // 反的 -mn
+        //   this.touchstartPageY += this.dm; // 变成了相当于, 滑动 h 后, 重新开始滑动, 虽然看上去是连续滑动
+        //   this.dm = 0; // 重置0
+        //   this.$apply();
+        // }
+
+
+
+        /*
+        * 只要移动距离dm, 超过 0.8*h 就触发 top_bottom_change 逻辑.
+        *
+        * 向下滑动为例, bottom item 移到top, translateY = (vhtop-top)*h+dm.
+        * vhtop-top <0 , 环形数组算差, 如 1-6=-5, 实际差=len-5, 表示 1 和前面 6 差2.
+        *
+        * 向上滑动时, (bottom-vhtop+1)*h+dm
+        *
+        * 当touchend后, 由于focus,vhtop,等更新了, 那么配合渲染逻辑: 超过多少倍h的item自动反向偏移到focus上方,
+        * 上一轮的 bottom 自然到顶部了.
+        * */
+        // if (this.dm > this.itemHeight * threshold) {
+        //   // bottom --> top
+        //   let b2tTY = this.diffIndex( this.vhtop,this.top,this.items.length ) * this.itemHeight + this.dm;
+        //
+        // }
+        // if (this.dm < -this.itemHeight * threshold) {
+        //   // top --> bottom
+        //   let t2bTy = (this.diffIndex( this.bottom, this.vhtop, this.items.length ) + 1) * this.itemHeight + this.dm;
+        // }
+
+
+
+
+
+      },
+      /**
+       * 需要补充更新.
+       * */
+      touchend(e) {
+        // console.log('touchend', e);
+        /*
+        * 松开时, dm<h/2 , 复位到上一个focus; dm>=h/2 , focus改变
+        * */
+
+        // let mn = parseInt(this.dm / this.itemHeight);
+        // let mod = this.dm % this.itemHeight;
+        //
+        // if (mod <= -this.itemHeight/2) {
+        //   mn--;
+        // }else if(mod < this.itemHeight/2) {
+        //   // focus 不变
+        // }else if (mod >= this.itemHeight/2) {
+        //   mn++;
+        // }
+
+        // // 整的在移动中就会得到消化更新
+        // let mod = this.dm % this.itemHeight;
+        // let mn = 0;
+        // if (mod <= -this.itemHeight / 2.) {
+        //   mn--;
+        // }
+        // if (mod >= this.itemHeight / 2) {
+        //   mn++;
+        // }
+        //
+        //
+        // this.focus = this.shiftIndex(this.focus, -mn, this.items.length); // 反的 -mn
+
+        this.dm = 0; // 重置0
+        this.transitionOn = true;
+        this.$apply();
+        let that = this;
+        setTimeout(()=>{
+          that.transitionOn = false;
+          that.$apply();
+        },200)
+        let args = {
+          index:this.focus,
+          value:this.items[this.focus],
+        }
+        // console.log('foucs change: ', args);
+        this.$emit('focusChange', args);
+      }
+
+    }
+
+    /**
+     * 手动指定focus哪个item*/
+    focusTo(index) {
+
+      if(index<0) index = 0;
+      if(index>=this.items.length) index = this.items.length;
+
+      this.focus = index;
+      this.$apply();
+    }
+    
+    events = {
+      
+    }
+    
+    onLoad(options) {
+      // 合并默认和定制的, 有限使用定制配置
+      this.options = Object.assign({}, defOpts, this.options);
+      if (this.options.viewNum % 2 == 0) {
+        this.options.viewNum = Math.max(1, this.options.viewNum - 1);
+        console.warn('\'viewNum\' must a odd number, has turned to odd: ', this.options.viewNum);
+      }
+      this.$apply();
+    }
+
+    // 环形当成线形
+    // 计算和前面索引的差
+    diffIndex(after, before, len) {
+      let d = after - before;
+      if (d >= 0) {
+        return d;
+      }else{
+        return len + d;
+      }
+    }
+
+    // 根据索引差推算出对应差位置的索引号 == 向前偏移 shiftIndex(self, -diff, len)
+    // shiftIndex((self, diff, len) {
+    //   let pre = self - diff;
+    //   if (pre >= 0) {
+    //     return pre;
+    //   }else{
+    //     return len + pre;
+    //   }
+    // }
+
+    /**
+     * 更通用的环形, index 移动*/
+    shiftIndex(cur, k, len) {
+      let now = cur+k;
+      // 0~len-1 直接用, 反之, 需要调整
+      if (now < 0) {
+        now += len
+      }
+      if (now > len-1) {
+        now -= len;
+      }
+      return now;
+    }
+
+    wxs = {
+      m: mywxs
+    }
+
+
+  }
+</script>
