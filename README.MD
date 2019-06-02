@@ -16,6 +16,14 @@
 ![loop-picker-demo](./assets/loop-picker-demo.gif)
 
 
+
+编辑`focus`直接切换 item :
+
+![](./assets/loop-picker-demo-edit.gif)
+
+
+
+
 ### 使用
 
 ```
