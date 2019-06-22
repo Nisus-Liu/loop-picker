@@ -97,7 +97,7 @@
       <view class="mypicker__item {{index==focus?(selected?'focus selected':'focus'):''}}"
             bindtap="itemTap({{index}})"
       style="height: {{itemHeight}}{{px}}; line-height: {{itemHeight}}{{px}}; transform: translateY({{m.translateY(index,vhtop,items.length,reverseThreshold,itemHeight,dm)}}px); {{transitionOn&&m.transitionOn(index,focus,(options.viewNum)/2,items.length)?'transition: transform 0.2s linear;':''}}">
-        <text wx:if="{{index==focus}}" style="font-size: {{itemHeight*0.6}}{{px}}">{{inputing?inputValue:item}}</text>
+        <text wx:if="{{index==focus}}" style="font-size: {{itemHeight*0.6}}{{px}}">{{inputting?inputValue:item}}</text>
         <text wx:else style="font-size: {{itemHeight*0.4}}{{px}}">{{item}}</text>
       </view>
     </block>
@@ -148,7 +148,7 @@
       
     }
     props = {
-
+      componentId:String,
       options:{
         type:Object,
         default:defOpts,
@@ -158,7 +158,7 @@
         default: [],
       },
       unit:String,
-      
+
     }
     
     data = {
@@ -176,10 +176,28 @@
       // 最顶部item索引
       // top:0,
       //
-      inputing:false,
+      inputting:false,
       inputValue:'',
       selected:false,
       lastValidInputValue:'',
+      // 当前组件的状态: blur, focus
+      status:'blur',
+    }
+
+    watch = {
+      focus() {
+        // console.log('focus change', this.focus);
+        let args = {
+          componentId:this.componentId,
+          index:this.focus,
+          value:this.items[this.focus],
+        }
+        // console.log('foucs change: ', args);
+        this.$emit('focusChange', args);
+      },
+      status() {
+        this.$emit('statusChange', {componentId:this.componentId, status: this.status})
+      }
     }
 
     computed = {
@@ -228,7 +246,7 @@
       },
 
       onInputIn(e) {
-        this.inputing = true;
+        this.inputting = true;
 
         // 取消选中状态
         this.selected = false;
@@ -258,7 +276,7 @@
         // console.log(this.inputValue,this.lastValidInputValue,iv)
       },
       onInputBlur(e) {
-        this.inputing = false;
+        this.inputting = false;
         this.selected = false;
         let newFocusValue = e.detail.value;
         this.lastValidInputValue = this.inputValue = '';
@@ -289,6 +307,7 @@
         // console.log('touchstart', e.touches[0].pageY);
         this.touchstartPageY = e.touches[0].pageY;
         this.touchstartFocus = this.focus;
+        this.status = 'focus';
       },
       /*
       * 消费 dm.
@@ -312,7 +331,9 @@
         dmm = dmm/this.itemHeight;
         let rdmm = Math.round(dmm);
         // focus 偏移
-        this.focus = this.shiftIndex(this.touchstartFocus, -rdmm, this.items.length);
+        //this.focus = this.shiftIndex(this.touchstartFocus, -rdmm, this.items.length);
+        let newFocus = this.shiftIndex(this.touchstartFocus, -rdmm, this.items.length);
+        this.focusTo(newFocus);
         // 同时, 需要调整位移, 让items处在当前滑动位置, 消除跳跃
         this.dm = (dmm - rdmm) * this.itemHeight;
 
@@ -407,31 +428,33 @@
 
         this.dm = 0; // 重置0
         this.transitionOn = true;
+
+        // 在输入时, 还是 focus 的
+        if (!this.inputting) {
+          this.status = 'blur';
+        }
+
         this.$apply();
         let that = this;
         setTimeout(()=>{
           that.transitionOn = false;
           that.$apply();
         },200)
-        let args = {
-          index:this.focus,
-          value:this.items[this.focus],
-        }
-        // console.log('foucs change: ', args);
-        this.$emit('focusChange', args);
       }
-
     }
 
     /**
-     * 手动指定focus哪个item*/
+     * 手动指定focus哪个item.
+     * 为了一致性, 更改 focus 的动作统一由此方法执行.
+     * */
     focusTo(index) {
 
       if(index<0) index = 0;
-      if(index>=this.items.length) index = this.items.length;
+      if(index>this.items.length-1) index = this.items.length-1;
 
       this.focus = index;
       this.$apply();
+
     }
     
     events = {
@@ -471,14 +494,15 @@
 
     /**
      * 更通用的环形, index 移动*/
-    shiftIndex(cur, k, len) {
-      let now = cur+k;
+    shiftIndex(current, move, len) {
+      let now = current+move;
       // 0~len-1 直接用, 反之, 需要调整
       if (now < 0) {
-        now += len
+        let mask = Math.ceil(-now / len) * len; // 保证mask为正
+        now = mask + now;
       }
       if (now > len-1) {
-        now -= len;
+        now = now % len;
       }
       return now;
     }
