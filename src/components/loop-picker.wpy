@@ -257,7 +257,6 @@
       onInputBlur(e) {
         this.inputing = false;
         this.selected = false;
-        this.inputing = false;
         let newFocusValue = e.detail.value;
         this.lastValidInputValue = this.inputValue = '';
         // 没有输入任何内容时视图不变
@@ -266,6 +265,11 @@
         }
         // 更新 focus
         let focus = this.items.indexOf(newFocusValue);
+        // items 是数值型, 但 input 的值是字符型
+        try {
+          if (focus < 0) focus = this.items.indexOf(Number(newFocusValue));
+        } catch (e) {
+        }
         if (focus>=0) {
           this.focusTo(focus);
         }

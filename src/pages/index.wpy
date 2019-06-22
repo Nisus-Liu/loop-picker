@@ -12,6 +12,10 @@
     height: 18px;
     font-size: 18px;
   }
+  .sub-title{
+    font-size: 14px;
+    color: #7e7e7e;
+  }
 </style>
 <template>
   <view class="container">
@@ -20,7 +24,7 @@
     </view>
     <loopPicker1 :items="items1" :options="defOpts1"></loopPicker1>
     <view class="title">
-      5栏式带单位
+      5栏式带单位<span class="sub-title">(指定初始focus)</span>
     </view>
     <loopPicker2 :items="items2" :options="defOpts2" unit="分钟"></loopPicker2>
     <view class="title">
@@ -79,6 +83,8 @@
     }
     onLoad() {
       console.log('onLoad')
+      // 初始 focus
+      this.$invoke('loopPicker2', 'focusTo', 10)
     }
   }
 </script>
