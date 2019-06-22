@@ -242,6 +242,9 @@
         if (iv.length >= 2) {
           // 校验
           let i = this.items.indexOf(iv);
+          try {
+            if (i < 0) i = this.items.indexOf(Number(iv));
+          } catch (e) {}
           // console.log('this.items.indexOf(iv)', this.items.indexOf(iv));
           if (i < 0) {
             // 输入值不合法
