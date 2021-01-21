@@ -1,11 +1,12 @@
 # loop-picker
 
+> **仅供学习参考**
 > `wepy` 组件
 
-模拟微信小程序官方`picker`的*可循环`picker`*--**`loop-picker`**. 
+模拟微信小程序官方`picker`的*可循环`picker`*--**`loop-picker`**.
 
-1. 比官方的`swiper`更流畅;
-2. 比`picker`类组件更好用, 支持**循环滑动**, 支持**直接点击修改focus的值**.
+1. 使用感受没有官方的`swiper`流畅;
+2. 但交互上比`picker`类组件更好用, 支持**循环滑动**, 支持**直接点击修改focus的值**.
 
 
 
